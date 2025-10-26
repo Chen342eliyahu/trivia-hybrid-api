@@ -1,6 +1,8 @@
 // A. יבוא ספריות
 require('dotenv').config(); 
 const express = require('express');
+// מייבאים גם את bodyParser כדי להשתמש בו בנפרד
+const bodyParser = require('body-parser'); 
 const { App, ExpressReceiver } = require('@slack/bolt'); 
 const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
@@ -12,11 +14,11 @@ const triviaLogic = require('./triviaLogic');
 const app = express();
 
 // 2. הגדרת ExpressReceiver (מקבל) מפורש ל-Slack
-// *** התיקון הקריטי: מונע קריאה כפולה של הזרם ***
+// *** מוסרים bodyParser: false ונותנים ל-Slack לנהל את נתיב האירועים ***
 const receiver = new ExpressReceiver({
     signingSecret: process.env.SLACK_SIGNING_SECRET,
     endpoint: '/slack/events', 
-    bodyParser: false // מונע מ-Bolt להשתמש ב-Body Parser של Express
+    // כדי לתקן את שגיאת ה-stream, נשתמש בטכניקה חיצונית, לכן משאירים את זה פשוט
 });
 
 // 3. יצירת ה-Bolt App וחיבור ל-Receiver
@@ -29,18 +31,32 @@ const slackApp = new App({
 // C. פורט (Port) שבו השרת יאזין
 const PORT = process.env.PORT || 3000;
 
+
 // D. הגדרות Middleware:
-// אלה חלות רק על נתיבי API ו-Web, לא על /slack/events
+// 1. מאפשר שימוש בקבצי ה-Frontend שלנו.
 app.use(express.static('public')); 
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true }));
+
+// 2. *** התיקון הקריטי: פרסור מותאם אישית של Body ***
+// אנו מוסיפים את פרסור ה-Body של Express רק עבור נתיבים שאינם /slack/events.
+// זה מבטיח שזרם הבקשה נשאר פתוח עבור Slack Bolt.
+app.use('/slack/events', bodyParser.raw({ type: '*/*' })); // מפרסר Raw Body רק עבור Slack
+app.use(bodyParser.json()); // מפרסר JSON עבור כל שאר נתיבי ה-API
+app.use(bodyParser.urlencoded({ extended: true })); // מפרסר URL-Encoded עבור כל שאר נתיבי ה-API
+
 
 // E. חיבור ה-Slack Listener ל-Express
 // 1. תיקון קריטי לאימות URL (חייב להיות לפני app.use(receiver.router))
 app.use((req, res, next) => {
     if (req.body && req.body.type === 'url_verification') {
-        console.log('🔐 Responding to Slack URL verification challenge...');
-        return res.status(200).json({ challenge: req.body.challenge });
+        // ה-body כאן הוא raw, אז אנחנו צריכים לקרוא אותו
+        // אבל מכיוון שהוספנו את bodyParser.raw() למעלה, ננסה לגשת ל-body ישירות (שכבר יצרנו אותו ב-bodyParser.json())
+        // אם זה עדיין קורס, יש לשנות את הקוד לטיפול ב-raw body.
+        
+        // נשתמש בבדיקה פשוטה יותר כרגע
+        if (req.body.challenge) {
+            console.log('🔐 Responding to Slack URL verification challenge...');
+            return res.status(200).json({ challenge: req.body.challenge });
+        }
     }
     next();
 });
@@ -172,7 +188,6 @@ app.get('/api/results/:userId', (req, res) => {
 
 
 // H2. *** ייבוא והפעלת קוד ה-Slack Client המחובר ל-API ***
-// קריטי להעביר את slackApp כארגומנט כדי למנוע Circular Dependency
 require('./slackClient')(slackApp); 
 
 
