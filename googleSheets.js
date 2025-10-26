@@ -64,8 +64,6 @@ async function loadAllRawTriviaQuestions() {
 
 /**
  * טוען את כל השאלות ומסנן לפי ID.
- * @param {string} questionnaireId - מזהה השאלון הדרוש.
- * @returns {Promise<Array<Object>>} - מערך של שאלות מסוננות מוכנות לשימוש.
  */
 async function loadAndFilterQuestions(questionnaireId) {
     const allRawQuestions = await loadAllRawTriviaQuestions();

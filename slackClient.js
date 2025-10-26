@@ -1,14 +1,17 @@
 // slackClient.js
 
-// 💡 הקובץ הזה יקבל את מופע slackApp כארגומנט מהקובץ index.js
+// הקובץ הזה מקבל את מופע slackApp כארגומנט מהקובץ index.js
 module.exports = (slackApp) => {
 
-    const API_BASE_URL = 'http://localhost:3000/api'; 
+    // שימוש במשתנה סביבה כדי לאפשר חיבור חיצוני ב-Render
+    const EXTERNAL_URL = process.env.API_EXTERNAL_URL || 'http://localhost:3000/';
+    const API_BASE_URL = EXTERNAL_URL + 'api'; 
 
     // --- פונקציות עזר לשליחת בקשות HTTP (fetch) ל-API שלנו ---
     async function sendApiRequest(endpoint, data = {}, method = 'POST') {
+        const url = API_BASE_URL + endpoint;
         try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            const response = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
                 body: method === 'POST' ? JSON.stringify(data) : undefined
@@ -74,7 +77,6 @@ module.exports = (slackApp) => {
     slackApp.command('/post-trivia-invite', async ({ command, ack, client }) => {
         await ack(); 
 
-        // בדיקה ראשונית של מצב המשחק דרך ה-API (GET)
         const statusData = await sendApiRequest('/quiz/current', {}, 'GET');
         
         if (statusData.status === 'finished' || statusData.message === 'No active quiz found.') {
@@ -126,7 +128,6 @@ module.exports = (slackApp) => {
         const userId = body.user.id;
         const triggerId = body.trigger_id;
 
-        // *** קריאה ל-API לשליפת נתוני המשחק הנוכחי ***
         const statusData = await sendApiRequest('/quiz/current', {}, 'GET');
         
         if (statusData.status === 'finished' || statusData.message === 'No active quiz found.') {
@@ -156,8 +157,7 @@ module.exports = (slackApp) => {
         const viewId = body.view.id; 
 
         try {
-            // *** קריאה ל-API לשליחת התשובה ***
-            await sendApiRequest('/answer', {
+            await sendApiRequest('/answer', 'POST', {
                 userId: userId,
                 questionIndex: questionIndex,
                 selectedAnswerIndex: selectedAnswerIndex
@@ -170,7 +170,6 @@ module.exports = (slackApp) => {
             }
         }
         
-        // *** קריאה ל-API למעבר לשאלה הבאה ***
         const nextQuestionResult = await sendApiRequest('/quiz/next');
 
         if (nextQuestionResult.finished) {

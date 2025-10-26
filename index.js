@@ -12,9 +12,11 @@ const triviaLogic = require('./triviaLogic');
 const app = express();
 
 // 2. הגדרת ExpressReceiver (מקבל) מפורש ל-Slack
+// *** התיקון הקריטי: מונע קריאה כפולה של הזרם ***
 const receiver = new ExpressReceiver({
     signingSecret: process.env.SLACK_SIGNING_SECRET,
     endpoint: '/slack/events', 
+    bodyParser: false // מונע מ-Bolt להשתמש ב-Body Parser של Express
 });
 
 // 3. יצירת ה-Bolt App וחיבור ל-Receiver
@@ -27,43 +29,23 @@ const slackApp = new App({
 // C. פורט (Port) שבו השרת יאזין
 const PORT = process.env.PORT || 3000;
 
-// D. הגדרות Middleware (לא חלות על נתיבי סלאק):
-// פונקציה לבדיקה אם הנתיב הוא לא של סלאק
-const isSlackPath = (req) => req.path.includes('/slack/events');
-
-// 1. מאפשר שימוש בקבצי ה-Frontend שלנו (כפי שהיה).
+// D. הגדרות Middleware:
+// אלה חלות רק על נתיבי API ו-Web, לא על /slack/events
 app.use(express.static('public')); 
-
-// 2. מפעיל את Body Parsers (JSON ו-URL-Encoded) רק אם הבקשה אינה מגיעה מסלאק!
-app.use((req, res, next) => {
-    if (isSlackPath(req)) {
-        return next(); // מדלג על פרסור גוף הבקשה עבור סלאק
-    }
-    // עבור כל שאר נתיבי ה-API והווב:
-    express.json()(req, res, next);
-});
-
-// נוודא שגם URL-Encoded נטען כראוי עבור שליחת נתונים מהאתר
-app.use((req, res, next) => {
-    if (isSlackPath(req)) {
-        return next();
-    }
-    express.urlencoded({ extended: true })(req, res, next);
-});
-// 💡 הערה: אם האתר שלך משתמש רק ב-JSON (כפי שהגדרנו ב-app.js), אפשר להשאיר רק את express.json().
+app.use(express.json()); 
+app.use(express.urlencoded({ extended: true }));
 
 // E. חיבור ה-Slack Listener ל-Express
-// *** תיקון קריטי לאימות URL ***
-// המידלוור הזה חייב להגיע לפני app.use(receiver.router)
+// 1. תיקון קריטי לאימות URL (חייב להיות לפני app.use(receiver.router))
 app.use((req, res, next) => {
     if (req.body && req.body.type === 'url_verification') {
-        // ה-body לא נהרס כאן כי אנחנו קוראים אותו ישירות
+        console.log('🔐 Responding to Slack URL verification challenge...');
         return res.status(200).json({ challenge: req.body.challenge });
     }
     next();
 });
-// ...
 
+// 2. חיבור ה-Router של Slack Bolt
 app.use(receiver.router); 
 
 // F. נקודת קצה בסיסית (מגיש את index.html)
@@ -190,12 +172,12 @@ app.get('/api/results/:userId', (req, res) => {
 
 
 // H2. *** ייבוא והפעלת קוד ה-Slack Client המחובר ל-API ***
+// קריטי להעביר את slackApp כארגומנט כדי למנוע Circular Dependency
 require('./slackClient')(slackApp); 
 
 
 // I. אתחול השרת
 (async () => {
-    // נתחיל להאזין לבקשות
     await app.listen(PORT);
     console.log(`⚡️ Hybrid Trivia Server is running on port ${PORT}!`);
 })();
