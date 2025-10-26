@@ -33,6 +33,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // E. חיבור ה-Slack Listener ל-Express
+// *** תיקון קריטי לאימות URL ***
+// מידלוור מיוחד שמטפל ב-url_verification לפני שהבקשה מגיעה ל-Slack Bolt.
+app.use((req, res, next) => {
+    if (req.body && req.body.type === 'url_verification') {
+        console.log('🔐 Responding to Slack URL verification challenge...');
+        return res.status(200).json({ challenge: req.body.challenge });
+    }
+    next();
+});
+// *** סוף תיקון האימות ***
+
 app.use(receiver.router); 
 
 // F. נקודת קצה בסיסית (מגיש את index.html)
@@ -159,7 +170,6 @@ app.get('/api/results/:userId', (req, res) => {
 
 
 // H2. *** ייבוא והפעלת קוד ה-Slack Client המחובר ל-API ***
-// 💡 המשתנה slackApp מועבר כארגומנט לפונקציה ב-slackClient.js
 require('./slackClient')(slackApp); 
 
 
