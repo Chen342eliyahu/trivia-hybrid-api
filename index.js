@@ -1,11 +1,12 @@
 // A. יבוא ספריות
 require('dotenv').config(); 
 const express = require('express');
-// מייבאים גם את bodyParser כדי להשתמש בו בנפרד
-const bodyParser = require('body-parser'); 
 const { App, ExpressReceiver } = require('@slack/bolt'); 
 const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
+
+// 💡 ייבוא body-parser - נשתמש בו כדי לפרסר את ה-body עבור נתיבי ה-API
+const bodyParser = require('body-parser');
 
 
 // B. הגדרת Express ו-Bolt
@@ -18,7 +19,7 @@ const app = express();
 const receiver = new ExpressReceiver({
     signingSecret: process.env.SLACK_SIGNING_SECRET,
     endpoint: '/slack/events', 
-    // כדי לתקן את שגיאת ה-stream, נשתמש בטכניקה חיצונית, לכן משאירים את זה פשוט
+    // אין צורך ב-bodyParser: false כאן, כי נטפל בכך ב-Middleware
 });
 
 // 3. יצירת ה-Bolt App וחיבור ל-Receiver
@@ -36,33 +37,32 @@ const PORT = process.env.PORT || 3000;
 // 1. מאפשר שימוש בקבצי ה-Frontend שלנו.
 app.use(express.static('public')); 
 
-// 2. *** התיקון הקריטי: פרסור מותאם אישית של Body ***
-// אנו מוסיפים את פרסור ה-Body של Express רק עבור נתיבים שאינם /slack/events.
-// זה מבטיח שזרם הבקשה נשאר פתוח עבור Slack Bolt.
-app.use('/slack/events', bodyParser.raw({ type: '*/*' })); // מפרסר Raw Body רק עבור Slack
-app.use(bodyParser.json()); // מפרסר JSON עבור כל שאר נתיבי ה-API
-app.use(bodyParser.urlencoded({ extended: true })); // מפרסר URL-Encoded עבור כל שאר נתיבי ה-API
-
 
 // E. חיבור ה-Slack Listener ל-Express
-// 1. תיקון קריטי לאימות URL (חייב להיות לפני app.use(receiver.router))
+// *** תיקון קריטי לאימות URL ***
+// מידלוור לאימות URL (חייב להיות לפני receiver.router)
 app.use((req, res, next) => {
     if (req.body && req.body.type === 'url_verification') {
-        // ה-body כאן הוא raw, אז אנחנו צריכים לקרוא אותו
-        // אבל מכיוון שהוספנו את bodyParser.raw() למעלה, ננסה לגשת ל-body ישירות (שכבר יצרנו אותו ב-bodyParser.json())
-        // אם זה עדיין קורס, יש לשנות את הקוד לטיפול ב-raw body.
-        
-        // נשתמש בבדיקה פשוטה יותר כרגע
-        if (req.body.challenge) {
-            console.log('🔐 Responding to Slack URL verification challenge...');
-            return res.status(200).json({ challenge: req.body.challenge });
-        }
+        console.log('🔐 Responding to Slack URL verification challenge...');
+        // ודא שאתה שולח JSON גם אם הגעת לכאן דרך bodyParser.raw()
+        return res.status(200).json({ challenge: req.body.challenge });
     }
     next();
 });
 
-// 2. חיבור ה-Router של Slack Bolt
+// 2. חיבור ה-Router של Slack Bolt לנתיב /slack/events.
+// המנגנון הפנימי של Bolt מטפל ב-Body Parsing והאותנטיקציה של נתיב זה.
 app.use(receiver.router); 
+
+
+// -----------------------------------------------------------
+// 💡 התיקון המרכזי: יצירת ראוטר נפרד עבור ה-API
+// -----------------------------------------------------------
+const apiRouter = express.Router();
+// מחברים את מנגנוני פרסור ה-Body (JSON/URL-Encoded) רק לראוטר הזה.
+apiRouter.use(bodyParser.json()); 
+apiRouter.use(bodyParser.urlencoded({ extended: true }));
+
 
 // F. נקודת קצה בסיסית (מגיש את index.html)
 app.get('/', (req, res) => {
@@ -70,7 +70,7 @@ app.get('/', (req, res) => {
 });
 
 // G. נקודת קצה לבדיקת סטטוס ה-API
-app.get('/api/status', (req, res) => {
+apiRouter.get('/status', (req, res) => {
     res.json({ status: 'API is operational', version: 'Hybrid 1.0', slack_connected: true });
 });
 
@@ -78,7 +78,7 @@ app.get('/api/status', (req, res) => {
 // H. *** API Endpoints for Quiz Management ***
 
 // POST /api/quiz/load/:quizId
-app.post('/api/quiz/load/:quizId', async (req, res) => {
+apiRouter.post('/quiz/load/:quizId', async (req, res) => {
     const quizId = req.params.quizId;
     try {
         const questions = await sheetsLoader.loadAndFilterQuestions(quizId); 
@@ -101,7 +101,7 @@ app.post('/api/quiz/load/:quizId', async (req, res) => {
 });
 
 // GET /api/quiz/current
-app.get('/api/quiz/current', (req, res) => {
+apiRouter.get('/quiz/current', (req, res) => {
     const game = triviaLogic.getActiveGame();
     if (!game || game.status === 'finished') {
         const leaderboard = game ? triviaLogic.getLeaderboard(game.userScores) : [];
@@ -125,7 +125,7 @@ app.get('/api/quiz/current', (req, res) => {
 });
 
 // POST /api/answer
-app.post('/api/answer', (req, res) => {
+apiRouter.post('/answer', (req, res) => {
     const { userId, questionIndex, selectedAnswerIndex } = req.body;
     
     if (!userId || questionIndex === undefined || selectedAnswerIndex === undefined) {
@@ -148,7 +148,7 @@ app.post('/api/answer', (req, res) => {
 });
 
 // POST /api/quiz/next
-app.post('/api/quiz/next', (req, res) => {
+apiRouter.post('/quiz/next', (req, res) => {
     const next = triviaLogic.nextQuestion();
     
     if (next.finished) {
@@ -168,7 +168,7 @@ app.post('/api/quiz/next', (req, res) => {
 });
 
 // GET /api/results/:userId
-app.get('/api/results/:userId', (req, res) => {
+apiRouter.get('/results/:userId', (req, res) => {
     const userId = req.params.userId;
     const answers = triviaLogic.getUserAnswers(userId);
     const game = triviaLogic.getActiveGame();
@@ -185,6 +185,12 @@ app.get('/api/results/:userId', (req, res) => {
         answers: answers
     });
 });
+
+
+// -----------------------------------------------------------
+// 3. חיבור הראוטר הנפרד לנתיב /api
+// -----------------------------------------------------------
+app.use('/api', apiRouter);
 
 
 // H2. *** ייבוא והפעלת קוד ה-Slack Client המחובר ל-API ***
