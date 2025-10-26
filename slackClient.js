@@ -34,6 +34,7 @@ module.exports = (slackApp) => {
     // 1. פקודה: /load-trivia-quiz [ID]
     // ----------------------------------------------------------------------
     slackApp.command('/load-trivia-quiz', async ({ command, ack, client, respond }) => {
+        // *** ack() מיידי חובה! ***
         await ack(); 
 
         const quizId = command.text.trim();
@@ -47,12 +48,6 @@ module.exports = (slackApp) => {
                 text: "Please specify a questionnaire ID (e.g., `/load-trivia-quiz 1`).",
             });
         }
-
-        await client.chat.postEphemeral({
-            channel: channelId,
-            user: userId,
-            text: `Attempting to load Quiz ID: *${quizId}*...`,
-        });
 
         try {
             const result = await sendApiRequest(`/quiz/load/${quizId}`, {}); 
@@ -72,51 +67,51 @@ module.exports = (slackApp) => {
 
 
     // ----------------------------------------------------------------------
-    // 2. פקודה: /post-trivia-invite 
+    // 2. פקודה: /post-trivia-invite (התיקון ל-operation_timeout)
     // ----------------------------------------------------------------------
-    slackApp.command('/post-trivia-invite', async ({ command, ack, client }) => {
+    slackApp.command('/post-trivia-invite', async ({ command, ack, client, respond }) => {
+        // *** ack() מיידי חובה! (משתמשים ב-respond() בהמשך) ***
         await ack(); 
 
-        const statusData = await sendApiRequest('/quiz/current', {}, 'GET');
-        
-        if (statusData.status === 'finished' || statusData.message === 'No active quiz found.') {
-            await client.chat.postMessage({
-                channel: command.channel_id,
-                text: "❌ Cannot start trivia: No questions loaded! Please load a questionnaire using `/load-trivia-quiz [ID]` first.",
-                response_type: 'ephemeral'
-            });
-            return;
-        }
-        
-        const totalQuestions = statusData.question.total; 
-
         try {
-            await client.chat.postMessage({
-                channel: command.channel_id,
-                text: "🧠 Weekly Trivia Challenge! 🎯",
-                blocks: [
-                    {
-                        type: "section",
-                        text: {
-                            type: "mrkdwn",
-                            text: `*🧠 Weekly Trivia Challenge! 🎯*\n\nReady to test your knowledge? This quiz has ${totalQuestions} questions!\n\n` 
-                        }
-                    },
-                    {
-                        type: "actions",
-                        elements: [
-                            {
-                                type: "button",
-                                text: { type: "plain_text", text: "🚀 Start Trivia" },
-                                style: "primary",
-                                action_id: "start_trivia"
-                            }
-                        ]
-                    }
-                ]
+            // 2. הקריאה ל-API
+            const statusData = await sendApiRequest('/quiz/current', {}, 'GET');
+            
+            // 3. בונים את ההודעה
+            let responseText, responseBlocks;
+            
+            if (statusData.status === 'finished' || statusData.message === 'No active quiz found.') {
+                 responseText = "❌ Cannot start trivia: No questions loaded! Please load a questionnaire using `/load-trivia-quiz [ID]` first.";
+                 responseBlocks = null;
+            } else {
+                 const totalQuestions = statusData.question.total;
+                 responseText = "🧠 Weekly Trivia Challenge! 🎯";
+                 responseBlocks = [
+                     {
+                         type: "section",
+                         text: { type: "mrkdwn", text: `*🧠 Weekly Trivia Challenge! 🎯*\n\nReady to test your knowledge? This quiz has ${totalQuestions} questions!\n\n` }
+                     },
+                     {
+                         type: "actions",
+                         elements: [ { type: "button", text: { type: "plain_text", text: "🚀 Start Trivia" }, style: "primary", action_id: "start_trivia" } ]
+                     }
+                 ];
+            }
+
+            // 4. משתמשים ב-respond() במקום postMessage/client.chat.postEphemeral
+            await respond({
+                text: responseText,
+                blocks: responseBlocks,
+                response_type: 'in_channel'
             });
+
+
         } catch (error) {
-            console.error('Error posting trivia invitation:', error);
+            // אם ה-fetch נכשל, שולחים הודעת שגיאה
+            await respond({
+                text: `❌ Error fetching quiz status: ${error.message}`,
+                response_type: 'ephemeral' 
+            });
         }
     });
 

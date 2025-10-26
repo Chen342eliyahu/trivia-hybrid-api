@@ -1,12 +1,10 @@
 // A. יבוא ספריות
 require('dotenv').config(); 
 const express = require('express');
+const bodyParser = require('body-parser'); // נוסף לטיפול בנתיבי API
 const { App, ExpressReceiver } = require('@slack/bolt'); 
 const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
-
-// 💡 ייבוא body-parser - נשתמש בו כדי לפרסר את ה-body עבור נתיבי ה-API
-const bodyParser = require('body-parser');
 
 
 // B. הגדרת Express ו-Bolt
@@ -15,11 +13,10 @@ const bodyParser = require('body-parser');
 const app = express();
 
 // 2. הגדרת ExpressReceiver (מקבל) מפורש ל-Slack
-// *** מוסרים bodyParser: false ונותנים ל-Slack לנהל את נתיב האירועים ***
 const receiver = new ExpressReceiver({
     signingSecret: process.env.SLACK_SIGNING_SECRET,
     endpoint: '/slack/events', 
-    // אין צורך ב-bodyParser: false כאן, כי נטפל בכך ב-Middleware
+    // לא משתמשים ב-bodyParser: false, אלא מפרידים את הראוטרים (הפתרון הבטוח)
 });
 
 // 3. יצירת ה-Bolt App וחיבור ל-Receiver
@@ -37,32 +34,23 @@ const PORT = process.env.PORT || 3000;
 // 1. מאפשר שימוש בקבצי ה-Frontend שלנו.
 app.use(express.static('public')); 
 
+// 2. *** התיקון הקריטי: פרסור מותאם אישית של Body עבור ה-API בלבד ***
+const apiRouter = express.Router();
+apiRouter.use(bodyParser.json()); 
+apiRouter.use(bodyParser.urlencoded({ extended: true }));
 
 // E. חיבור ה-Slack Listener ל-Express
-// *** תיקון קריטי לאימות URL ***
-// מידלוור לאימות URL (חייב להיות לפני receiver.router)
+// 1. תיקון קריטי לאימות URL (חייב להיות לפני receiver.router)
 app.use((req, res, next) => {
     if (req.body && req.body.type === 'url_verification') {
         console.log('🔐 Responding to Slack URL verification challenge...');
-        // ודא שאתה שולח JSON גם אם הגעת לכאן דרך bodyParser.raw()
         return res.status(200).json({ challenge: req.body.challenge });
     }
     next();
 });
 
-// 2. חיבור ה-Router של Slack Bolt לנתיב /slack/events.
-// המנגנון הפנימי של Bolt מטפל ב-Body Parsing והאותנטיקציה של נתיב זה.
+// 2. חיבור ה-Router של Slack Bolt
 app.use(receiver.router); 
-
-
-// -----------------------------------------------------------
-// 💡 התיקון המרכזי: יצירת ראוטר נפרד עבור ה-API
-// -----------------------------------------------------------
-const apiRouter = express.Router();
-// מחברים את מנגנוני פרסור ה-Body (JSON/URL-Encoded) רק לראוטר הזה.
-apiRouter.use(bodyParser.json()); 
-apiRouter.use(bodyParser.urlencoded({ extended: true }));
-
 
 // F. נקודת קצה בסיסית (מגיש את index.html)
 app.get('/', (req, res) => {
@@ -79,7 +67,7 @@ apiRouter.get('/status', (req, res) => {
 
 // POST /api/quiz/load/:quizId
 apiRouter.post('/quiz/load/:quizId', async (req, res) => {
-    const quizId = req.params.quizId;
+    const quizId = req.params.params.quizId;
     try {
         const questions = await sheetsLoader.loadAndFilterQuestions(quizId); 
         
@@ -187,9 +175,7 @@ apiRouter.get('/results/:userId', (req, res) => {
 });
 
 
-// -----------------------------------------------------------
 // 3. חיבור הראוטר הנפרד לנתיב /api
-// -----------------------------------------------------------
 app.use('/api', apiRouter);
 
 
