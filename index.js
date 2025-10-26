@@ -27,22 +27,42 @@ const slackApp = new App({
 // C. פורט (Port) שבו השרת יאזין
 const PORT = process.env.PORT || 3000;
 
-// D. הגדרות Middleware:
+// D. הגדרות Middleware (לא חלות על נתיבי סלאק):
+// פונקציה לבדיקה אם הנתיב הוא לא של סלאק
+const isSlackPath = (req) => req.path.includes('/slack/events');
+
+// 1. מאפשר שימוש בקבצי ה-Frontend שלנו (כפי שהיה).
 app.use(express.static('public')); 
-app.use(express.json()); 
-app.use(express.urlencoded({ extended: true }));
+
+// 2. מפעיל את Body Parsers (JSON ו-URL-Encoded) רק אם הבקשה אינה מגיעה מסלאק!
+app.use((req, res, next) => {
+    if (isSlackPath(req)) {
+        return next(); // מדלג על פרסור גוף הבקשה עבור סלאק
+    }
+    // עבור כל שאר נתיבי ה-API והווב:
+    express.json()(req, res, next);
+});
+
+// נוודא שגם URL-Encoded נטען כראוי עבור שליחת נתונים מהאתר
+app.use((req, res, next) => {
+    if (isSlackPath(req)) {
+        return next();
+    }
+    express.urlencoded({ extended: true })(req, res, next);
+});
+// 💡 הערה: אם האתר שלך משתמש רק ב-JSON (כפי שהגדרנו ב-app.js), אפשר להשאיר רק את express.json().
 
 // E. חיבור ה-Slack Listener ל-Express
 // *** תיקון קריטי לאימות URL ***
-// מידלוור מיוחד שמטפל ב-url_verification לפני שהבקשה מגיעה ל-Slack Bolt.
+// המידלוור הזה חייב להגיע לפני app.use(receiver.router)
 app.use((req, res, next) => {
     if (req.body && req.body.type === 'url_verification') {
-        console.log('🔐 Responding to Slack URL verification challenge...');
+        // ה-body לא נהרס כאן כי אנחנו קוראים אותו ישירות
         return res.status(200).json({ challenge: req.body.challenge });
     }
     next();
 });
-// *** סוף תיקון האימות ***
+// ...
 
 app.use(receiver.router); 
 
