@@ -66,18 +66,20 @@ module.exports = (slackApp) => {
     });
 
 
-    // ----------------------------------------------------------------------
-    // 2. פקודה: /post-trivia-invite (התיקון ל-operation_timeout)
-    // ----------------------------------------------------------------------
-    slackApp.command('/post-trivia-invite', async ({ command, ack, client, respond }) => {
-        // *** ack() מיידי חובה! (משתמשים ב-respond() בהמשך) ***
-        await ack(); 
 
+ // ----------------------------------------------------------------------
+// 2. פקודה: /post-trivia-invite (התיקון ל-operation_timeout)
+// ----------------------------------------------------------------------
+slackApp.command('/post-trivia-invite', async ({ command, ack, client, respond }) => {
+    // *** 1. חובה: ACK מיידי חובה! ***
+    await ack(); 
+
+    // *** 2. הרצת הלוגיקה האיטית באופן אסינכרוני כדי לא לחסום את ה-ACK ***
+    (async () => {
         try {
-            // 2. הקריאה ל-API
+            // הקריאה ל-API
             const statusData = await sendApiRequest('/quiz/current', {}, 'GET');
             
-            // 3. בונים את ההודעה
             let responseText, responseBlocks;
             
             if (statusData.status === 'finished' || statusData.message === 'No active quiz found.') {
@@ -87,6 +89,7 @@ module.exports = (slackApp) => {
                  const totalQuestions = statusData.question.total;
                  responseText = "🧠 Weekly Trivia Challenge! 🎯";
                  responseBlocks = [
+                     // ... (הבלוקים של ההזמנה כפי שהיו בקוד המקורי)
                      {
                          type: "section",
                          text: { type: "mrkdwn", text: `*🧠 Weekly Trivia Challenge! 🎯*\n\nReady to test your knowledge? This quiz has ${totalQuestions} questions!\n\n` }
@@ -98,13 +101,12 @@ module.exports = (slackApp) => {
                  ];
             }
 
-            // 4. משתמשים ב-respond() במקום postMessage/client.chat.postEphemeral
+            // 3. משתמשים ב-respond() כדי לשלוח את ההודעה באיחור
             await respond({
                 text: responseText,
                 blocks: responseBlocks,
                 response_type: 'in_channel'
             });
-
 
         } catch (error) {
             // אם ה-fetch נכשל, שולחים הודעת שגיאה
@@ -113,8 +115,8 @@ module.exports = (slackApp) => {
                 response_type: 'ephemeral' 
             });
         }
-    });
-
+    })();
+});
     // ----------------------------------------------------------------------
     // 3. טיפול בלחיצה על כפתור "Start Trivia" 
     // ----------------------------------------------------------------------
