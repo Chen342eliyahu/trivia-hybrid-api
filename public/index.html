@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novidea Trivia Challenge</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>🏆 Novidea Hybrid Trivia</h1>
+        <div id="status-message" class="loading">טוען מצב משחק...</div>
+    </header>
+
+    <main id="app-container">
+        <div id="quiz-load-section" class="card">
+            <h2>טעינת שאלון</h2>
+            <p>בחר את מזהה השאלון (Questionnaire ID) שברצונך לטעון כדי להתחיל משחק חדש.</p>
+            <input type="text" id="quiz-id-input" placeholder="הכנס ID שאלון (לדוגמה: 1)">
+            <button id="load-quiz-button">טען שאלון</button>
+            <p id="load-status"></p>
+        </div>
+
+        <div id="trivia-screen" class="card hidden">
+            <h2 id="question-header"></h2>
+            <p id="question-text"></p>
+            
+            <div id="options-container" class="options">
+                </div>
+
+            <div id="feedback-area">
+                </div>
+
+            <button id="next-question-button" class="hidden">שאלה הבאה >> </button>
+        </div>
+
+        <div id="results-screen" class="card hidden">
+            <h2>🎉 תוצאות המשחק</h2>
+            <p id="final-score-text"></p>
+            <div id="leaderboard-display">
+                <h3>טבלת מובילים (משחק נוכחי)</h3>
+                <ul id="leaderboard-list">
+                    </ul>
+            </div>
+            <button id="play-again-button">🔄 שחק שוב</button>
+            
+            <div id="detailed-summary">
+                <h3>סיכום מפורט</h3>
+                <div id="summary-list">
+                    </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Hybrid Trivia Bot</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
