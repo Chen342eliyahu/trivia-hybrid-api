@@ -2,9 +2,8 @@
 require('dotenv').config(); 
 const express = require('express');
 const { App, ExpressReceiver } = require('@slack/bolt'); 
-const sheetsLoader = require('./googleSheets'); 
+// 🚨 הוסר: const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
-
 
 // B. הגדרת Express ו-Bolt
 const app = express();
@@ -21,14 +20,14 @@ const slackApp = new App({
 });
 
 // C. פורט (Port) שבו השרת יאזין
-const PORT = process.env.PORT || 3000;
+const PORT = processs.env.PORT || 3000;
 
 
 // D. הגדרות Middleware:
 // 1. מאפשר שימוש בקבצי ה-Frontend שלנו.
 app.use(express.static('public')); 
 
-// 2. *** API Body Parsers (מוגדרים רק ב-apiRouter) ***
+// 2. API Body Parsers (מוגדרים רק ב-apiRouter)
 const apiRouter = express.Router();
 apiRouter.use(express.json()); 
 apiRouter.use(express.urlencoded({ extended: true }));
@@ -38,7 +37,7 @@ apiRouter.use(express.urlencoded({ extended: true }));
 app.use(receiver.router); 
 
 
-// F. *** חיבור ה-API לראוטר הנפרד לנתיב /api ***
+// F. חיבור ה-API לראוטר הנפרד לנתיב /api
 app.use('/api', apiRouter); 
 
 
@@ -50,12 +49,12 @@ app.get('/', (req, res) => {
 
 // H. *** API לניהול חידונים (Routes) ***
 
-// G. סטטוס בריאות
+// H.1. סטטוס בריאות
 apiRouter.get('/status', (req, res) => {
     res.json({ status: 'API is operational', version: 'Hybrid 1.0', slack_connected: true });
 });
 
-// H.2. POST /api/admin/load-quiz-data - 💡 ה-Endpoint החדש של המנהל
+// H.2. POST /api/admin/load-quiz-data - 💡 ה-Endpoint החדש של המנהל (מטעין JSON)
 apiRouter.post('/admin/load-quiz-data', (req, res) => {
     const { quizId, questions } = req.body; 
 
@@ -64,6 +63,7 @@ apiRouter.post('/admin/load-quiz-data', (req, res) => {
     }
 
     try {
+        // מטעין את השאלות החדשות לזיכרון (NodeCache)
         const game = triviaLogic.initializeGame(quizId, questions);
         res.status(200).json({
             message: `New quiz "${quizId}" loaded successfully.`,
