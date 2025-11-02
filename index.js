@@ -20,7 +20,7 @@ const slackApp = new App({
 });
 
 // C. פורט (Port) שבו השרת יאזין
-const PORT = processs.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 
 // D. הגדרות Middleware:
