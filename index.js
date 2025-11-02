@@ -2,7 +2,6 @@
 require('dotenv').config(); 
 const express = require('express');
 const { App, ExpressReceiver } = require('@slack/bolt'); 
-const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
 
 
@@ -58,26 +57,27 @@ apiRouter.get('/status', (req, res) => {
     res.json({ status: 'API is operational', version: 'Hybrid 1.0', slack_connected: true });
 });
 
-// H.2. POST /api/quiz/load/:quizId - טעינת שאלון
-apiRouter.post('/quiz/load/:quizId', async (req, res) => {
-    const quizId = req.params.quizId;
-    try {
-        const questions = await sheetsLoader.loadAndFilterQuestions(quizId); 
-        
-        if (questions.length === 0) {
-            return res.status(404).json({ message: 'Quiz not found or empty.' });
-        }
+// POST /api/admin/load-quiz-data
+// 💡 מקבל את כל נתוני השאלון כ-JSON Body מה-Web Admin
+apiRouter.post('/admin/load-quiz-data', (req, res) => {
+    // ה-Body Parsers כבר מפרסרים את גוף הבקשה ל-JSON
+    const { quizId, questions } = req.body; 
 
+    if (!quizId || !questions || questions.length === 0) {
+        return res.status(400).json({ message: 'Missing quizId or questions data.' });
+    }
+
+    try {
+        // שומרים את השאלון בזיכרון (Cache)
         const game = triviaLogic.initializeGame(quizId, questions);
-        res.status(200).json({ 
-            message: `Quiz "${quizId}" loaded successfully with ${questions.length} questions.`,
-            quizId: quizId,
+
+        res.status(200).json({
+            message: `New quiz "${quizId}" loaded successfully.`,
             totalQuestions: game.totalQuestions
         });
-
     } catch (error) {
-        console.error("Error loading quiz:", error.message);
-        res.status(500).json({ message: 'Failed to load quiz data.', error: error.message });
+        console.error("Error initializing game:", error.message);
+        res.status(500).json({ message: 'Failed to initialize quiz logic.' });
     }
 });
 
