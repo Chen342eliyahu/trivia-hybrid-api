@@ -1,22 +1,53 @@
 
+const fetch = require('node-fetch'); 
+
 module.exports = (slackApp) => {
 
-  async function sendApiRequest(endpoint, data = {}, method = 'POST') {
-    const baseUrl = process.env.API_EXTERNAL_URL || 'http://localhost:3000/api';
-    const url = `${baseUrl}${endpoint}`;
-
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: method === 'POST' ? JSON.stringify(data) : undefined
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('FETCH ERROR:', error);
-      throw error;
+    // הגדרה סופית: הכתובת שאליה השרת צריך להתחבר כדי לדבר עם עצמו
+    let RENDER_INTERNAL_URL;
+    if (process.env.PORT) {
+        // אם רץ ב-Render, השתמש בכתובת הפנימית של Container: http://localhost:PORT
+        RENDER_INTERNAL_URL = `http://localhost:${process.env.PORT}/api`;
+    } else {
+        // אם רץ מקומית, השתמש ב-localhost:3000
+        RENDER_INTERNAL_URL = 'http://localhost:3000/api'; 
     }
-  }
+    
+    // 💡 כעת, sendApiRequest משתמשת בכתובת המקומית הפנימית
+    const API_BASE_URL = RENDER_INTERNAL_URL;
+
+
+    // --- פונקציות עזר לשליחת בקשות HTTP (fetch) ל-API שלנו ---
+    async function sendApiRequest(endpoint, data = {}, method = 'POST') {
+        
+        // 1. הסרת הקו הנטוי המוביל מה-endpoint
+        const cleanedEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+        
+        // 2. בניית ה-URL הסופי: http://localhost:10000/api/quiz/load/1
+        const url = `${API_BASE_URL}/${cleanedEndpoint}`;
+        
+        // ... שאר הפונקציה (לוגיקת fetch) נשארת כפי שהייתה
+        
+        // ...
+        
+        try {
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: method === 'POST' ? JSON.stringify(data) : undefined
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                console.error(`API Error on ${url}:`, result);
+                throw new Error(result.message || response.statusText || `API call failed with status: ${response.status}`);
+            }
+            return result;
+        } catch (error) {
+            console.error(`FETCH ERROR (Internal) to ${url}:`, error);
+            throw new Error(`Failed to communicate with API: ${error.message}`);
+        }
+    }
 
   // -----------------------------------------------
   // /load-trivia-quiz-new
