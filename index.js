@@ -2,6 +2,7 @@
 require('dotenv').config(); 
 const express = require('express');
 const { App, ExpressReceiver } = require('@slack/bolt'); 
+const sheetsLoader = require('./googleSheets'); 
 const triviaLogic = require('./triviaLogic');   
 
 
@@ -29,22 +30,19 @@ app.use(express.static('public'));
 
 // 2. *** API Body Parsers (מוגדרים רק ב-apiRouter) ***
 const apiRouter = express.Router();
-// ה-Body Parsers של Express מופעלים רק על נתיבי ה-API
 apiRouter.use(express.json()); 
 apiRouter.use(express.urlencoded({ extended: true }));
 
 
 // E. חיבור ה-Slack Listener ל-Express
-// ה-Router של Slack מטפל באימות (Authentication) ובאירועים
 app.use(receiver.router); 
 
 
-// F. *** חיבור ה-API לראוטר הנפרד לנתיב /api (חובה לפני נתיב הבית) ***
+// F. *** חיבור ה-API לראוטר הנפרד לנתיב /api ***
 app.use('/api', apiRouter); 
 
 
 // G. נקודת קצה בסיסית (מגיש את index.html)
-// *** חייב לבוא אחרון אחרי כל הראוטים של ה-API וה-Slack ***
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
@@ -52,15 +50,13 @@ app.get('/', (req, res) => {
 
 // H. *** API לניהול חידונים (Routes) ***
 
-// H.1. סטטוס בריאות
+// G. סטטוס בריאות
 apiRouter.get('/status', (req, res) => {
     res.json({ status: 'API is operational', version: 'Hybrid 1.0', slack_connected: true });
 });
 
-// POST /api/admin/load-quiz-data
-// 💡 מקבל את כל נתוני השאלון כ-JSON Body מה-Web Admin
+// H.2. POST /api/admin/load-quiz-data - 💡 ה-Endpoint החדש של המנהל
 apiRouter.post('/admin/load-quiz-data', (req, res) => {
-    // ה-Body Parsers כבר מפרסרים את גוף הבקשה ל-JSON
     const { quizId, questions } = req.body; 
 
     if (!quizId || !questions || questions.length === 0) {
@@ -68,11 +64,10 @@ apiRouter.post('/admin/load-quiz-data', (req, res) => {
     }
 
     try {
-        // שומרים את השאלון בזיכרון (Cache)
         const game = triviaLogic.initializeGame(quizId, questions);
-
         res.status(200).json({
             message: `New quiz "${quizId}" loaded successfully.`,
+            quizId: quizId,
             totalQuestions: game.totalQuestions
         });
     } catch (error) {
@@ -80,6 +75,7 @@ apiRouter.post('/admin/load-quiz-data', (req, res) => {
         res.status(500).json({ message: 'Failed to initialize quiz logic.' });
     }
 });
+
 
 // H.3. GET /api/quiz/current - שליפת שאלה נוכחית
 apiRouter.get('/quiz/current', (req, res) => {

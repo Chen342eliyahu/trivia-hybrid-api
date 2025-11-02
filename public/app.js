@@ -2,7 +2,6 @@
 
 // קבועים
 const API_BASE_URL = '/api'; 
-// יוצר ID משתמש ייחודי לכל מבקר בדפדפן - חשוב לסנכרון ציונים
 const userId = `web_user_${Math.random().toString(36).substring(2, 9)}`; 
 
 // אלמנטים DOM
@@ -18,14 +17,15 @@ const nextQuestionButton = document.getElementById('next-question-button');
 const leaderboardList = document.getElementById('leaderboard-list');
 const summaryList = document.getElementById('summary-list');
 const playAgainButton = document.getElementById('play-again-button');
+const adminTools = document.getElementById('admin-tools'); // אלמנט המנהל הראשי
+const adminTitle = document.getElementById('admin-title'); 
 
-// משתני מצב מקומיים (הכרחיים ל-Frontend)
+// משתני מצב מקומיים
 let currentQuestionData = null;
 let currentQuestionIndex = 0;
 let totalQuestions = 0;
 let selectedAnswerIndex = null;
 let gameStatus = 'initial';
-// userId מוגדר למעלה
 
 // --- פונקציות עזר ל-API ---
 
@@ -41,8 +41,7 @@ async function sendApiRequest(endpoint, method = 'GET', data = null) {
 
     try {
         const response = await fetch(url, options);
-        // השגיאה שהייתה נפתרה ב-index.js, כעת response.json() יעבוד
-        const result = await response.json(); 
+        const result = await response.json();
 
         if (!response.ok) {
             console.error(`API Error on ${endpoint}:`, result);
@@ -66,16 +65,8 @@ function showScreen(screenId) {
     triviaScreen.classList.add('hidden');
     resultsScreen.classList.add('hidden');
 
-    // אם המשתמש הוא מנהל, נציג לו את אזור הטעינה
-    const urlParams = new URLSearchParams(window.location.search);
-    const isAdminMode = urlParams.has('admin');
-
     if (screenId === 'initial') {
         loadQuizSection.classList.remove('hidden');
-        if (isAdminMode) {
-             quizIdInput.classList.remove('hidden'); 
-             loadQuizButton.classList.remove('hidden'); 
-        }
     } else if (screenId === 'trivia') {
         triviaScreen.classList.remove('hidden');
     } else if (screenId === 'results') {
@@ -84,12 +75,10 @@ function showScreen(screenId) {
 }
 
 /**
- * טוען שאלון חדש באמצעות API
- * 💡 כעת תומך בטעינה אוטומטית מפרמטר URL
+ * טוען שאלון חדש (Admin) באמצעות שליחת JSON ל-API החדש
  */
 async function loadQuiz(quizIdOverride = null) {
     const quizId = quizIdOverride || quizIdInput.value.trim();
-    // 💡 שליפת נתוני JSON משדה הטקסט החדש
     const quizDataString = document.getElementById('quiz-data-input').value;
 
     if (!quizId || !quizDataString) {
@@ -108,7 +97,7 @@ async function loadQuiz(quizIdOverride = null) {
         loadStatus.textContent = `טוען שאלון ID ${quizId} (מ-JSON)...`;
         loadQuizButton.disabled = true;
 
-        // --- שליחה ל-API החדש (admin/load-quiz-data) ---
+        // 💡 שליחה ל-Endpoint החדש: /api/admin/load-quiz-data
         const result = await sendApiRequest(`/admin/load-quiz-data`, 'POST', {
             quizId: quizId,
             questions: questions
@@ -149,9 +138,9 @@ async function loadCurrentQuestion() {
 
     } catch (error) {
         // אם שגיאה 404 (No active quiz found) או שגיאת FETCH
-        // מציג את מסך ההתחלה הכללי (משתמש רגיל לא רואה כפתורים)
         showScreen('initial');
-        loadStatus.textContent = "אין חידון פעיל כרגע. אנא המתן לטעינה מחדש ע''י המנהל.";
+        adminTitle.textContent = "אין חידון פעיל";
+        loadStatus.textContent = "אנא המתן לטעינת שאלון חדש על ידי המנהל.";
     }
 }
 
@@ -210,7 +199,6 @@ async function handleAnswerSelect(index, buttonElement) {
         nextQuestionButton.classList.remove('hidden');
 
     } catch (error) {
-        // אם המשתמש כבר ענה על השאלה הנוכחית (ה-API מחזיר 400)
         if (error.message.includes('already answered')) {
             feedbackArea.className = 'feedback-incorrect';
             feedbackArea.textContent = 'כבר ענית על שאלה זו. לחץ "שאלה הבאה" כדי להמשיך.';
@@ -267,7 +255,6 @@ async function displayResults(leaderboard = null) {
         leaderboard.forEach((player, index) => {
             const listItem = document.createElement('li');
             const icon = ['🥇', '🥈', '🥉'][index] || `${index + 1}.`;
-            // הערה: בממשק הווב אין לנו את שם המשתמש, אלא רק את ה-ID
             listItem.textContent = `${icon} משתמש: ${player.userId} - ציון: ${player.currentGameScore}`;
             leaderboardList.appendChild(listItem);
         });
@@ -301,6 +288,7 @@ function attachEventListeners() {
         showScreen('initial');
         loadStatus.textContent = '';
         loadQuizButton.disabled = false;
+        // אפשרות לאפס את הניקוד באמצעות קריאת API עתידית
     });
 }
 
@@ -313,20 +301,22 @@ function init() {
     
     const urlParams = new URLSearchParams(window.location.search);
     const isAdminMode = urlParams.has('admin'); // פרמטר מנהל: ?admin=true
-    const quizIdFromUrl = urlParams.get('id'); // ID לטעינה אוטומטית: &id=1
 
     if (isAdminMode) {
-        // *** מצב מנהל: חושפים את ממשק הניהול המלא ***
+        // *** מצב מנהל: חשיפת ממשק הניהול ***
         showScreen('initial'); 
-        document.getElementById('admin-tools').classList.remove('hidden');
-        document.getElementById('admin-title').textContent = "🔒 ממשק ניהול שאלונים";
+        adminTools.classList.remove('hidden'); // חשיפת כלי המנהל
+        adminTitle.textContent = "🔒 ממשק ניהול שאלונים";
         loadStatus.textContent = "מנהל: הדבק JSON ולחץ 'טען שאלון'.";
         
-        // אם ID קיים ב-URL, מציגים אותו (אבל עדיין צריך להדביק JSON)
+        const quizIdFromUrl = urlParams.get('id');
         if (quizIdFromUrl) {
+             // אם ID קיים ב-URL (לדוגמה: ?admin=true&id=1), ממלאים את השדה
              quizIdInput.value = quizIdFromUrl;
+             loadStatus.textContent = `מנהל: מוכן לטעון ID ${quizIdFromUrl}. הדבק JSON.`;
         }
-    } 
+        
+    }
     
     // *** משתמש רגיל / סוף אתחול המנהל ***
     loadCurrentQuestion();
