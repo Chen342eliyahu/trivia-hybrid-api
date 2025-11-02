@@ -1,5 +1,10 @@
 const fetch = require('node-fetch');
 
+// הוסף את השורה הבאה אם אתה משתמש בגרסה 3.x (כמו 3.3.2):
+// זה מוודא שאנחנו משתמשים ב-fetch מהייצוא הנכון של הספרייה.
+// *** ודא שאתה משתמש בזה ***
+const fetch = require('node-fetch').default || require('node-fetch');
+
 module.exports = (slackApp) => {
 
   async function sendApiRequest(endpoint, data = {}, method = 'POST') {
