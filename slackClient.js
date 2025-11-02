@@ -1,5 +1,5 @@
-
-const fetch = require('node-fetch'); 
+// 💡 אם אתה מריץ Node.js 22, המשתנה 'fetch' כבר גלובלי.
+// אנו נסמוך על כך שהוא גלובלי, וכך נימנע משגיאת 'already declared'.
 
 module.exports = (slackApp) => {
 
