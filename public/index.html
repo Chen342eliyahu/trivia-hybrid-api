@@ -15,12 +15,21 @@
 
     <main id="app-container">
         <div id="quiz-load-section" class="card">
-            <h2>טעינת שאלון</h2>
-            <p>בחר את מזהה השאלון (Questionnaire ID) שברצונך לטעון כדי להתחיל משחק חדש.</p>
-            <input type="text" id="quiz-id-input" placeholder="הכנס ID שאלון (לדוגמה: 1)">
-            <button id="load-quiz-button">טען שאלון</button>
-            <p id="load-status"></p>
-        </div>
+    <h2 id="admin-title">טוען משחק...</h2>
+    <p id="load-status">אנא המתן בזמן שאנו בודקים אם יש חידון פעיל.</p>
+    
+    <div id="admin-tools" class="hidden">
+        <label for="quiz-id-input">מזהה שאלון (Quiz ID):</label>
+        <input type="text" id="quiz-id-input" placeholder="לדוגמה: 1, 2" value="1">
+        
+        <label for="quiz-data-input">הדבק נתוני שאלון (JSON) כאן:</label>
+        <textarea id="quiz-data-input" rows="10" placeholder='[
+  { "Question": "מה בירת ישראל?", "CorrectAnswerIndex": 1, "options": ["תל אביב", "ירושלים"], "Explanation": "ירושלים היא בירת ישראל" }
+]'></textarea>
+        
+        <button id="load-quiz-button">טען שאלון חדש</button>
+    </div>
+</div>
 
         <div id="trivia-screen" class="card hidden">
             <h2 id="question-header"></h2>

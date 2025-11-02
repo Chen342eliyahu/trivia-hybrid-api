@@ -89,17 +89,30 @@ function showScreen(screenId) {
  */
 async function loadQuiz(quizIdOverride = null) {
     const quizId = quizIdOverride || quizIdInput.value.trim();
-    
-    if (!quizId) {
-        loadStatus.textContent = '❌ אנא הזן ID שאלון.';
+    // 💡 שליפת נתוני JSON משדה הטקסט החדש
+    const quizDataString = document.getElementById('quiz-data-input').value;
+
+    if (!quizId || !quizDataString) {
+        loadStatus.textContent = '❌ חסרים מזהה שאלון או נתונים.';
         return;
     }
 
-    loadStatus.textContent = `טוען שאלון ID ${quizId}...`;
-    loadQuizButton.disabled = true;
-
     try {
-        const result = await sendApiRequest(`/quiz/load/${quizId}`, 'POST', {});
+        const questions = JSON.parse(quizDataString);
+
+        if (!Array.isArray(questions) || questions.length === 0) {
+            loadStatus.textContent = '❌ נתוני ה-JSON אינם מערך תקין או שהם ריקים.';
+            return;
+        }
+
+        loadStatus.textContent = `טוען שאלון ID ${quizId} (מ-JSON)...`;
+        loadQuizButton.disabled = true;
+
+        // --- שליחה ל-API החדש (admin/load-quiz-data) ---
+        const result = await sendApiRequest(`/admin/load-quiz-data`, 'POST', {
+            quizId: quizId,
+            questions: questions
+        });
         
         loadStatus.textContent = `✅ השאלון "${result.quizId}" נטען בהצלחה! יש ${result.totalQuestions} שאלות.`;
         
@@ -107,7 +120,7 @@ async function loadQuiz(quizIdOverride = null) {
         await loadCurrentQuestion();
         
     } catch (error) {
-        loadStatus.textContent = `❌ שגיאה בטעינה: ${error.message}`;
+        loadStatus.textContent = `❌ שגיאה בטעינה: ודא פורמט JSON תקין. שגיאה: ${error.message}`;
         loadQuizButton.disabled = false;
     }
 }
@@ -303,18 +316,17 @@ function init() {
     const quizIdFromUrl = urlParams.get('id'); // ID לטעינה אוטומטית: &id=1
 
     if (isAdminMode) {
-        // *** מצב מנהל ***
-        showScreen('initial'); // חושף את אזור הטעינה
+        // *** מצב מנהל: חושפים את ממשק הניהול המלא ***
+        showScreen('initial'); 
+        document.getElementById('admin-tools').classList.remove('hidden');
+        document.getElementById('admin-title').textContent = "🔒 ממשק ניהול שאלונים";
+        loadStatus.textContent = "מנהל: הדבק JSON ולחץ 'טען שאלון'.";
         
-        loadStatus.textContent = "מנהל: הזן ID שאלון ולחץ 'טען שאלון'.";
-        
-        // אם המנהל ציין ID ישירות ב-URL, טוענים מיד.
+        // אם ID קיים ב-URL, מציגים אותו (אבל עדיין צריך להדביק JSON)
         if (quizIdFromUrl) {
              quizIdInput.value = quizIdFromUrl;
-             loadQuiz(quizIdFromUrl); // מפעילים טעינה אוטומטית
-             return; // עוצרים את ה-init
         }
-    }
+    } 
     
     // *** משתמש רגיל / סוף אתחול המנהל ***
     loadCurrentQuestion();
